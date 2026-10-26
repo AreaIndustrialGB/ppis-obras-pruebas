@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PPIs Obras · Pruebas</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#172033;--muted:#657084;--line:#d9dee7;--nav:#111827;--ok:#16804a;--nc:#c92b32;--na:#747b87;--pend:#d79615;--blue:#1769aa}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}.hidden{display:none!important}
+header{position:sticky;top:0;z-index:10;background:var(--nav);color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center}
+main{max-width:1100px;margin:auto;padding:14px 12px 82px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.grid{display:grid;gap:10px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px}.kpi b{display:block;font-size:30px}.kpi span{font-size:11px;color:var(--muted)}
+label{display:block;font-size:12px;font-weight:700;color:#475569;margin:8px 0 5px}
+input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
+textarea{min-height:90px}.btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;color:#fff;background:#1f2937}
+.btn.ok{background:var(--ok)}.btn.nc{background:var(--nc)}.btn.na{background:var(--na)}.btn.blue{background:var(--blue)}.btn.gray{background:#e5e7eb;color:#111827}
+nav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(6,1fr);background:#fff;border-top:1px solid var(--line)}
+nav button{border:0;background:#fff;padding:10px 3px;font-size:11px}.view{display:none}.view.active{display:block}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:800}.okb{background:var(--ok)}.ncb{background:var(--nc)}.nab{background:var(--na)}.pendb{background:var(--pend)}
+.small{font-size:12px;color:var(--muted)}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:left}.scroll{overflow:auto}
+.row{display:flex;gap:8px;align-items:center}.grow{flex:1}.danger{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;border-radius:10px;padding:10px;font-weight:800}
+.auth{max-width:430px;margin:7vh auto;padding:15px}.logo{font-size:30px;font-weight:900}
+@media(max-width:700px){.g4,.g2{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}table{min-width:650px}}
+</style>
+</head>
+<body>
+<div id="auth" class="auth">
+  <div class="logo">PPIs Obras</div>
+  <p class="small">Versión de pruebas · Dos Hermanas</p>
+  <div class="card">
+    <label>Email</label><input id="email" type="email">
+    <label>Contraseña</label><input id="password" type="password">
+    <label>Nombre</label><input id="fullname">
+    <div class="grid g2" style="margin-top:12px">
+      <button id="login" class="btn blue">Entrar</button>
+      <button id="signup" class="btn gray">Crear usuario</button>
+    </div>
+    <p id="authmsg" class="small"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+<header>
+  <b>PPIs OBRAS</b><span class="grow"></span>
+  <span id="rol" class="small" style="color:#fff"></span>
+  <button id="logout" class="btn gray" style="padding:7px 10px">Salir</button>
+</header>
+<main>
+<section id="panel" class="view active"></section>
+<section id="inspeccion" class="view"></section>
+<section id="ncs" class="view"></section>
+<section id="planos" class="view"></section>
+<section id="matriz" class="view"></section>
+<section id="mas" class="view"></section>
+</main>
+<nav>
+<button data-v="panel">Panel</button><button data-v="inspeccion">Inspección</button>
+<button data-v="ncs">NC</button><button data-v="planos">Planos</button>
+<button data-v="matriz">Matriz</button><button data-v="mas">Más</button>
+</nav>
+</div>
+
+<script type="module">
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.118.0';
+const sb=createClient('https://alzwjjhligjnjitenyyu.supabase.co','sb_publishable_fuaKldorK-m6WnEtkrUXew_lhID0b6K');
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const st={user:null,profile:null,role:null,obra:null,obras:[],caps:[],ppis:[],op:[],zonas:[],ins:[],ncs:[],planos:[],hist:[]};
+const roleL={admin:'Administrador / Director',jefe_obra:'Jefe de Obra',jefe_produccion:'Jefe de Producción',consulta:'Consulta'};
+const esc=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const badge=r=>r==='ok'?'<span class="badge okb">OK</span>':r==='nc'?'<span class="badge ncb">NC</span>':r==='na'?'<span class="badge nab">NA</span>':'<span class="badge pendb">PEND</span>';
+const ppi=id=>st.ppis.find(x=>x.id===id), zona=id=>st.zonas.find(x=>x.id===id);
+const canWrite=()=>['admin','jefe_obra','jefe_produccion'].includes(st.role);
+const canValidate=()=>['admin','jefe_obra'].includes(st.role);
+
+async function load(){
+ const oid=st.obra.id;
+ const [c,p,o,z,i,n,pl,h]=await Promise.all([
+  sb.from('capitulos').select('*').order('orden'),
+  sb.from('ppi_master').select('*').order('codigo'),
+  sb.from('obra_ppis').select('*').eq('obra_id',oid),
+  sb.from('zonas').select('*').eq('obra_id',oid).order('orden'),
+  sb.from('inspecciones').select('*').eq('obra_id',oid).order('fecha',{ascending:false}),
+  sb.from('no_conformidades').select('*').eq('obra_id',oid).order('created_at',{ascending:false}),
+  sb.from('planos').select('*').eq('obra_id',oid).order('fase').order('codigo'),
+  sb.from('historial').select('*').eq('obra_id',oid).order('created_at',{ascending:false}).limit(100)
+ ]);
+ st.caps=c.data||[];st.ppis=p.data||[];st.op=o.data||[];st.zonas=z.data||[];st.ins=i.data||[];st.ncs=n.data||[];st.planos=pl.data||[];st.hist=h.data||[];
+}
+function activePpis(){const ids=new Set(st.op.filter(x=>x.activo).map(x=>x.ppi_id));return st.ppis.filter(x=>ids.has(x.id))}
+function latest(){const m=new Map;for(const x of st.ins){const k=x.ppi_id+'|'+x.zona_id;if(!m.has(k))m.set(k,x)}return m}
+function renderPanel(){
+ const m=latest(), ps=activePpis();let total=0,done=0,hold=0;
+ for(const p of ps)for(const z of st.zonas){total++;const x=m.get(p.id+'|'+z.id);if(x&&['ok','na'].includes(x.resultado))done++;if(p.tipo_control==='punto_parada'&&(!x||x.resultado==='nc'))hold++}
+ const open=st.ncs.filter(x=>x.estado!=='cerrada');
+ $('#panel').innerHTML=`<h1>Panel de obra</h1><p class="small">${esc(st.obra.nombre)}</p>
+ <div class="grid g4"><div class="kpi"><b>${total}</b><span>Previstos</span></div><div class="kpi"><b>${done}</b><span>Realizados</span></div><div class="kpi"><b>${open.length}</b><span>NC abiertas</span></div><div class="kpi"><b>${hold}</b><span>Puntos parada</span></div></div>
+ <div class="card" style="margin-top:12px"><h3>NC abiertas</h3>${open.length?open.slice(0,8).map(n=>`<p><b>NC-${String(n.codigo).padStart(3,'0')}</b> · ${esc(ppi(n.ppi_id)?.codigo)} · ${esc(n.descripcion)}</p>`).join(''):'<p class="small">Sin NC abiertas</p>'}</div>`;
+}
+function renderIns(){
+ const ps=activePpis();
+ $('#inspeccion').innerHTML=`<h1>Nueva inspección</h1><div class="card">
+ <label>PPI</label><select id="ip">${ps.map(p=>`<option value="${p.id}">${esc(p.codigo)} · ${esc(p.nombre)}</option>`).join('')}</select>
+ <label>Zona</label><select id="iz">${st.zonas.map(z=>`<option value="${z.id}">${esc(z.nombre)} · ${esc(z.ejes)}</option>`).join('')}</select>
+ <label>Responsable</label><input id="ir">
+ <label>Observaciones</label><textarea id="io"></textarea>
+ <label>Fotos</label><input id="if" type="file" accept="image/*" capture="environment" multiple>
+ <div class="grid g2" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+ <button class="btn ok" data-r="ok">OK</button><button class="btn nc" data-r="nc">NC</button><button class="btn na" data-r="na">NA</button></div>
+ <p id="imsg" class="small"></p></div>`;
+ $$('#inspeccion [data-r]').forEach(b=>b.onclick=()=>saveInspection(b.dataset.r));
+}
+async function saveInspection(result){
+ if(!canWrite())return alert('Tu rol es solo consulta');
+ const p=ppi($('#ip').value),z=zona($('#iz').value);
+ if(result==='ok'&&p.tipo_control==='punto_parada'){
+  const bloque=st.ncs.find(n=>n.ppi_id===p.id&&n.zona_id===z.id&&n.estado!=='cerrada');
+  if(bloque)return alert('NO AUTORIZADO CONTINUAR: existe una NC abierta');
+ }
+ $('#imsg').textContent='Guardando...';
+ const {data:ins,error}=await sb.from('inspecciones').insert({
+  obra_id:st.obra.id,ppi_id:p.id,zona_id:z.id,ejes:z.ejes,responsable:$('#ir').value,
+  resultado:result,observaciones:$('#io').value,inspector_id:st.user.id,inspector_nombre:st.profile?.full_name||st.user.email
+ }).select().single();
+ if(error){$('#imsg').textContent=error.message;return}
+ for(const f of [...$('#if').files]){
+  const path=st.obra.codigo+'/'+ins.id+'/'+Date.now()+'-'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const up=await sb.storage.from('evidencias').upload(path,f);
+  if(!up.error)await sb.from('fotos').insert({obra_id:st.obra.id,inspeccion_id:ins.id,tipo:'inspeccion',path,subido_por:st.user.id});
+ }
+ await load();renderAll();alert('Inspección guardada');
+}
+function renderNC(){
+ $('#ncs').innerHTML=`<h1>No conformidades</h1><div class="card"><div class="scroll"><table><thead><tr><th>NC</th><th>PPI</th><th>Descripción</th><th>Estado</th><th></th></tr></thead><tbody>
+ ${st.ncs.map(n=>`<tr><td>NC-${String(n.codigo).padStart(3,'0')}</td><td>${esc(ppi(n.ppi_id)?.codigo)}</td><td>${esc(n.descripcion)}</td><td>${esc(n.estado)}</td><td><button class="btn gray" data-n="${n.id}">Abrir</button></td></tr>`).join('')}</tbody></table></div></div><div id="nd"></div>`;
+ $$('#ncs [data-n]').forEach(b=>b.onclick=()=>openNC(b.dataset.n));
+}
+function openNC(id){
+ const n=st.ncs.find(x=>x.id===id);
+ $('#nd').innerHTML=`<div class="card">${ppi(n.ppi_id)?.tipo_control==='punto_parada'&&n.estado!=='cerrada'?'<div class="danger">NO AUTORIZADO CONTINUAR</div>':''}
+ <h3>NC-${String(n.codigo).padStart(3,'0')} · ${esc(ppi(n.ppi_id)?.codigo)}</h3>
+ <p>${esc(n.descripcion)}</p><label>Responsable corrección</label><input id="nr" value="${esc(n.responsable_correccion||'')}">
+ <label>Fecha objetivo</label><input id="nf" type="date" value="${esc(n.fecha_objetivo||'')}">
+ <label>Evidencia</label><textarea id="ne">${esc(n.evidencia_correccion||'')}</textarea>
+ <div class="grid g2" style="margin-top:10px">
+ ${n.estado==='abierta'?'<button class="btn blue" data-e="en_correccion">Iniciar corrección</button>':''}
+ ${n.estado==='en_correccion'?'<button class="btn blue" data-e="pendiente_validacion">Enviar a validación</button>':''}
+ ${n.estado==='pendiente_validacion'&&canValidate()?'<button class="btn ok" data-e="cerrada">Validar y cerrar</button>':''}
+ <button class="btn gray" data-e="">Guardar</button></div></div>`;
+ $$('#nd [data-e]').forEach(b=>b.onclick=()=>updNC(n,b.dataset.e||null));
+}
+async function updNC(n,estado){
+ const body={responsable_correccion:$('#nr').value,fecha_objetivo:$('#nf').value||null,evidencia_correccion:$('#ne').value};
+ if(estado)body.estado=estado;
+ const {error}=await sb.from('no_conformidades').update(body).eq('id',n.id);
+ if(error)return alert(error.message);
+ await load();renderAll();if(estado!=='cerrada')openNC(n.id);
+}
+function renderPlanos(){
+ $('#planos').innerHTML=`<h1>Planos</h1><div class="card">${st.planos.map(p=>`<div class="row" style="padding:9px 0;border-bottom:1px solid #e5e7eb"><div><b>${esc(p.codigo)}</b><br><span class="small">${esc(p.titulo)} · ${esc(p.fase)} · Rev ${esc(p.revision)}</span></div><span class="grow"></span><span class="badge ${p.estado==='vigente'?'okb':'pendb'}">${esc(p.estado)}</span></div>`).join('')}</div>`;
+}
+function renderMatriz(){
+ $('#matriz').innerHTML=`<h1>Matriz Maestra</h1><div class="card"><div class="scroll"><table><thead><tr><th>Código</th><th>Control</th><th>Tipo</th><th>Frecuencia</th></tr></thead><tbody>
+ ${st.ppis.map(p=>`<tr><td>${esc(p.codigo)}</td><td>${esc(p.nombre)}</td><td>${esc(p.tipo_control)}</td><td>${esc(p.frecuencia)}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function renderMas(){
+ $('#mas').innerHTML=`<h1>Más</h1><div class="card"><h3>Histórico</h3>${st.hist.slice(0,30).map(h=>`<p><b>${esc(h.accion)}</b><br><span class="small">${esc(h.detalle)} · ${esc(h.usuario_nombre||'')}</span></p>`).join('')}</div>`;
+}
+function renderAll(){renderPanel();renderIns();renderNC();renderPlanos();renderMatriz();renderMas()}
+async function enter(){
+ const [{data:p},{data:r},{data:o}]=await Promise.all([
+  sb.from('profiles').select('*').eq('id',st.user.id).single(),
+  sb.from('user_roles').select('*').eq('user_id',st.user.id).single(),
+  sb.from('obras').select('*').order('codigo')
+ ]);
+ st.profile=p;st.role=r?.role;st.obras=o||[];st.obra=st.obras.find(x=>x.activa)||st.obras[0];
+ $('#rol').textContent=roleL[st.role]||st.role;$('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
+ await load();renderAll();
+}
+$('#login').onclick=async()=>{const {data,error}=await sb.auth.signInWithPassword({email:$('#email').value,password:$('#password').value});$('#authmsg').textContent=error?.message||'';if(data?.user){st.user=data.user;await enter()}};
+$('#signup').onclick=async()=>{const {error}=await sb.auth.signUp({email:$('#email').value,password:$('#password').value,options:{data:{full_name:$('#fullname').value}}});$('#authmsg').textContent=error?.message||'Usuario creado. Confirma el email si recibes un correo.'};
+$('#logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
+$$('nav button').forEach(b=>b.onclick=()=>{$$('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.v))});
+const {data:{session}}=await sb.auth.getSession();if(session){st.user=session.user;await enter()}
+</script>
+</body></html>
